@@ -33,6 +33,12 @@ namespace BitFunnel
     }
 
 
+    std::unique_ptr<ITermToText> Factories::CreateTermToText()
+    {
+        return std::unique_ptr<ITermToText>(new TermToText());
+    }
+
+
     TermToText::TermToText()
     {
     }

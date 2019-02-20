@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 
-// Copyright (c) 2016, Microsoft
+// Copyright (c) 2018, Microsoft
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,47 +20,44 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#pragma once
 
-#include <iostream>
-
-#include "BitFunnel/Index/IIngestor.h"
-#include "Environment.h"
-#include "WriteSlicesCommand.h"
+#include "BitFunnel/IInterface.h"       // Base class.
 
 
 namespace BitFunnel
 {
+    class QueryInstrumentation;
+    class ResultsBuffer;
+    class TermMatchNode;
+
     //*************************************************************************
     //
-    // WriteSlicesCommand
+    // IQueryEngine
+    //
+    // An abstract base class or interface for concrete QueryEngine classes,
+    // such as thuse that use NativeJIT or interpret the query tree.
+    // It defines the common public methods needed to run parsed queries.
     //
     //*************************************************************************
-    WriteSlicesCommand::WriteSlicesCommand(Environment & environment,
-                                           Id id,
-                                           char const * /*parameters*/)
-        : TaskBase(environment, id, Type::Synchronous)
+    class IQueryEngine : public IInterface
     {
-    }
+    public:
+        // Parse a query
+        virtual TermMatchNode const *Parse(const char *query) = 0;
 
+        // Runs a parsed query
+        virtual void Run(TermMatchNode const * tree,
+                         QueryInstrumentation & instrumentation,
+                         ResultsBuffer & resultsBuffer) = 0;
 
-    void WriteSlicesCommand::Execute()
-    {
-        std::cout
-            << "Writing slices . . ."
-            << std::endl
-            << std::endl;
-        auto & fileManager = GetEnvironment().GetSimpleIndex().GetFileManager();
-        GetEnvironment().GetIngestor().TemporaryWriteAllSlices(fileManager);
-    }
+        // Adds the diagnostic keyword prefix to the list of prefixes that
+        // enable diagnostics.
+        virtual void EnableDiagnostic(char const * prefix) = 0;
 
+        // Removes the diagnostic keyword prefix from the list of prefixes
+        // that enable diagnostics.
+        virtual void DisableDiagnostic(char const * prefix) = 0;
 
-    ICommand::Documentation WriteSlicesCommand::GetDocumentation()
-    {
-        return Documentation(
-            "write",
-            "Write all slices to disk.",
-            "write\n"
-            "  Write all slices to disk."
-        );
-    }
+    };
 }

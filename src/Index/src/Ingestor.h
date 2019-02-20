@@ -69,9 +69,10 @@ namespace BitFunnel
         //   Per Shard
         //      CumulativeTermCountd
         //      DocumentFrequencyTable (with term text if termToText provided)
-        //      IndexedIdfTable
         virtual void WriteStatistics(IFileManager & fileManager,
                                      ITermToText const * termToText) const override;
+
+        virtual void TemporaryReadAllSlices(IFileManager& fileManager) override;
 
         virtual void TemporaryWriteAllSlices(IFileManager& fileManager) const override;
 
@@ -132,6 +133,8 @@ namespace BitFunnel
         // Returns a number of Shards and a Shard with the given ShardId.
         virtual size_t GetShardCount() const override;
         virtual IShard& GetShard(size_t shard) const override;
+
+        virtual IShardDefinition const & GetShardDefinition() const override;
 
         virtual IRecycler& GetRecycler() const override;
 

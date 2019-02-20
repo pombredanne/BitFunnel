@@ -28,6 +28,7 @@
 #include "BitFunnel/Chunks/DocumentFilters.h"
 #include "BitFunnel/Chunks/Factories.h"
 #include "BitFunnel/Chunks/IChunkManifestIngestor.h"
+#include "BitFunnel/Chunks/IChunkWriter.h"
 #include "BitFunnel/Configuration/IFileSystem.h"
 #include "BitFunnel/Exceptions.h"
 #include "BitFunnel/Index/Factories.h"
@@ -111,6 +112,11 @@ namespace BitFunnel
             1u,
             CmdLine::GreaterThan(0));
 
+        CmdLine::OptionalParameter<const char *> writer(
+            "writer",
+            "Specify chunk writer (annotate or copy)",
+            "copy");
+
 
         parser.AddParameter(manifestFileName);
         parser.AddParameter(outputPath);
@@ -118,6 +124,7 @@ namespace BitFunnel
         parser.AddParameter(random);
         parser.AddParameter(size);
         parser.AddParameter(count);
+        parser.AddParameter(writer);
 
         int returnCode = 1;
 
@@ -157,13 +164,18 @@ namespace BitFunnel
                                 outputPath,
                                 manifestFileName,
                                 gramSize,
-                                filter);
+                                filter,
+                                writer);
 
                 returnCode = 0;
             }
-            catch (RecoverableError e)
+            catch (std::exception e)
             {
                 output << "Error: " << e.what() << std::endl;
+            }
+            catch (Logging::CheckException e)
+            {
+                output << "Error: " << e.GetMessage().c_str() << std::endl;
             }
             catch (...)
             {
@@ -181,7 +193,8 @@ namespace BitFunnel
         char const * chunkListFileName,
         // TODO: gramSize should be unsigned once CmdLineParser supports unsigned.
         int gramSize,
-        IDocumentFilter & filter) const
+        IDocumentFilter & filter,
+        char const * writer) const
     {
         // TODO: cast of gramSize can be removed when it's fixed to be unsigned.
         auto index = Factories::CreateSimpleIndex(m_fileSystem);
@@ -210,9 +223,28 @@ namespace BitFunnel
             outputDirectory,
             index->GetFileSystem());
 
+        // Select IChunkWriterFactory based on name provided on command line.
+        std::unique_ptr<IChunkWriterFactory> chunkWriterFactory;
+        if (!strcmp(writer, "copy"))
+        {
+            chunkWriterFactory = Factories::CreateCopyingChunkWriterFactory(*fileManager);
+        }
+        else if (!strcmp(writer, "annotate"))
+        {
+            chunkWriterFactory =
+                Factories::CreateAnnotatingChunkWriterFactory(
+                    *fileManager,
+                    ingestor.GetShardDefinition());
+        }
+        else
+        {
+            FatalError error("Invalid writer. Use `copy` or `annotate`.");
+            throw error;
+        }
+
         auto manifest = Factories::CreateChunkManifestIngestor(
             m_fileSystem,
-            fileManager.get(),
+            chunkWriterFactory.get(),
             filePaths,
             configuration,
             ingestor,

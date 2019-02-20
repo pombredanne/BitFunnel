@@ -48,8 +48,8 @@ namespace BitFunnel
         void AnalyzeRowsInOneShard(
             ShardId const & shardId,
             ITermToText const & termToText,
-            std::ostream& out) const;
-
+            std::ostream& out,
+            std::ostream& summaryOut) const;
 
         class Column
         {

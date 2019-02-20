@@ -35,17 +35,21 @@ namespace BitFunnel
     class IDiagnosticStream;
     class IInputStream;
     class IMatchVerifier;
+    class IQueryEngine;
     class IPlanRows;
     class IRowSet;
     class ISimpleIndex;
+    class IStreamConfiguration;
     class QueryInstrumentation;
-    class QueryResources;
     class ResultsBuffer;
     class SimpleResultsProcessor;
     class TermMatchNode;
 
     namespace Factories
     {
+        std::unique_ptr<IQueryEngine> CreateQueryEngine(ISimpleIndex const & index,
+                                                                   IStreamConfiguration const & config);
+
         std::unique_ptr<IMatchVerifier> CreateMatchVerifier(std::string query);
 
         IPlanRows& CreatePlanRows(IInputStream& input,
@@ -57,14 +61,5 @@ namespace BitFunnel
         IRowSet& CreateRowSet(ISimpleIndex const & indexData,
                               IPlanRows const & planRows,
                               IAllocator& allocator);
-
-        // TODO: get rid of these convenience methods?
-        void RunQueryPlanner(TermMatchNode const & tree,
-                             ISimpleIndex const & index,
-                             QueryResources & resources,
-                             IDiagnosticStream & diagnosticStream,
-                             QueryInstrumentation & instrumentation,
-                             ResultsBuffer & resultsBuffer,
-                             bool useNativeCode);
     }
 }

@@ -18,8 +18,10 @@ set(CPPFILES
     QueryGenerator.cpp
     QueryLogBuilderTool.cpp
     REPL.cpp
+    SaveCommand.cpp
     ScriptCommand.cpp
     ShardBuilder.cpp
+    ShardCommand.cpp
     ShowCommand.cpp
     StatisticsBuilder.cpp
     StatusCommand.cpp
@@ -28,7 +30,6 @@ set(CPPFILES
     TermTableBuilderTool.cpp
     ThreadsCommand.cpp
     VerifyCommand.cpp
-    WriteSlicesCommand.cpp
 )
 
 set(WINDOWS_CPPFILES
@@ -57,8 +58,10 @@ set(PRIVATE_HFILES
     QueryGenerator.h
     QueryLogBuilderTool.h
     REPL.h
+    SaveCommand.h
     ScriptCommand.h
     ShardBuilder.h
+    ShardCommand.h
     ShowCommand.h
     StatisticsBuilder.h
     StatusCommand.h
@@ -68,7 +71,6 @@ set(PRIVATE_HFILES
     TermTableBuilderTool.h
     ThreadsCommand.h
     VerifyCommand.h
-    WriteSlicesCommand.h
 )
 
 set(WINDOWS_PRIVATE_HFILES

@@ -23,7 +23,6 @@
 #pragma once
 
 #include <iosfwd>                           // std::istream parameter.
-//#include <memory>                           // std::unique_ptr
 #include <string>                           // std::string embedded, template parameter.
 #include <unordered_map>                    // std::unordered_map embedded.
 

@@ -107,7 +107,6 @@ namespace BitFunnel
                       bitsPerDocument);
         }
 
-        std::cout << "Best configuration is " << m_bestConfiguration << std::endl;
         return m_bestConfiguration;
     }
 
@@ -295,16 +294,25 @@ namespace BitFunnel
                                              Term::c_maxIdfX10Value + 1);
 
         distributor->WaitForCompletion();
+
+        for (Term::IdfX10 idf = 0; idf <= Term::c_maxIdfX10Value; ++idf)
+        {
+            std::cout
+                << static_cast<uint32_t>(idf)
+                << ": best configuration is "
+                << m_configurations[idf].ConfigurationAsDecimalDigits()
+                << std::endl;
+        }
     }
 
 
-    RowConfiguration TreatmentOptimal::GetTreatment(Term term) const
+    RowConfiguration TreatmentOptimal::GetTreatment(Term::IdfX10 idf) const
     {
         // DESIGN NOTE: we can't c_maxIdfX10Value directly to min because min
         // takes a reference and the compiler has already turned it into a
         // constant, which we can't take a reference to.
         auto local = Term::c_maxIdfX10Value;
-        Term::IdfX10 idf = std::min(term.GetIdfSum(), local);
+        idf = std::min(idf, local);
         return m_configurations[idf];
     }
 }

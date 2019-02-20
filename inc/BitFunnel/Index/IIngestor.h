@@ -39,6 +39,7 @@ namespace BitFunnel
     class IRecycler;
     class ITokenManager;
     class IShard;
+    class IShardDefinition;
     class ITermToText;
 
     // BITFUNNELTYPES
@@ -52,8 +53,8 @@ namespace BitFunnel
 
     //*************************************************************************
     //
-    // IIngester is an abstract class or interface of classes that
-    // represents the entire BitFunnel index as viewed by the document ingestion
+    // IIngester is an abstract class or interface for classes that
+    // represent the entire BitFunnel index as viewed by the document ingestion
     // pipeline. This interface is used by the host of the index to populate the
     // index. Provides methods to add and remove documents, verify if a document
     // exists in the index, and assert facts on documents in the index.
@@ -75,10 +76,11 @@ namespace BitFunnel
         //   Per Shard
         //      CumulativeTermCountd
         //      DocumentFrequencyTable (with term text if termToText provided)
-        //      IndexedIdfTable
         virtual void WriteStatistics(IFileManager & fileManager,
                                      ITermToText const * termToText) const = 0;
 
+
+        virtual void TemporaryReadAllSlices(IFileManager& fileManager) = 0;
 
         virtual void TemporaryWriteAllSlices(IFileManager& fileManager) const = 0;
 
@@ -142,6 +144,8 @@ namespace BitFunnel
         // Returns a number of Shards and a Shard with the given ShardId.
         virtual size_t GetShardCount() const = 0;
         virtual IShard& GetShard(size_t shard) const = 0;
+
+        virtual IShardDefinition const & GetShardDefinition() const = 0;
 
         virtual IRecycler& GetRecycler() const = 0;
 

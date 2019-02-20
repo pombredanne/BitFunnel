@@ -22,6 +22,7 @@
 
 
 #include "BitFunnel/Configuration/Factories.h"
+#include "BitFunnel/Exceptions.h"
 #include "BitFunnel/Index/Factories.h"
 #include "BitFunnel/Index/Helpers.h"
 #include "BitFunnel/Index/IRecycler.h"
@@ -107,16 +108,6 @@ namespace BitFunnel
     //        << "Attempting to overwrite existing FileSystem.";
     //    m_fileSystem = std::move(fileSystem);
     //}
-
-
-    void SimpleIndex::SetIdfTable(
-        std::unique_ptr<IIndexedIdfTable> idfTable)
-    {
-        EnsureStarted(false);
-        CHECK_EQ(m_idfTable.get(), nullptr)
-            << "Attempting to overwrite existing IndexIdfTable.";
-        m_idfTable = std::move(idfTable);
-    }
 
 
     void SimpleIndex::SetSchema(
@@ -210,20 +201,6 @@ namespace BitFunnel
                     m_shardDefinition->GetShardCount());
         }
 
-        if (m_idfTable == nullptr)
-        {
-            // When we're building statistics we don't yet have an
-            // IndexedIdfTable. Just use an empty one for now. This means
-            // that terms that are created will all be marked with the
-            // default IDF value. This is not a problem since the term
-            // IDF values are not examined by the StatisticsBuild. They
-            // exist primarily for the query pipeline where the TermTable
-            // needs terms anotated with IDF values to handle the case
-            // where the terms have an implicit, or adhoc mapping to
-            // RowIds.
-            m_idfTable = Factories::CreateIndexedIdfTable();
-        }
-
         if (m_facts.get() == nullptr)
         {
             m_facts = Factories::CreateFactSet();
@@ -234,7 +211,6 @@ namespace BitFunnel
             m_configuration =
                 Factories::CreateConfiguration(gramSize,
                                                generateTermToText,
-                                               *m_idfTable,
                                                *m_facts);
         }
     }
@@ -279,13 +255,6 @@ namespace BitFunnel
                     m_shardDefinition->GetShardCount());
         }
 
-        if (m_idfTable == nullptr)
-        {
-            auto input = m_fileManager->IndexedIdfTable(0).OpenForRead();
-            Term::IdfX10 defaultIdf = 60;   // TODO: use proper value here.
-            m_idfTable = Factories::CreateIndexedIdfTable(*input, defaultIdf);
-        }
-
         if (m_facts.get() == nullptr)
         {
             m_facts = Factories::CreateFactSet();
@@ -296,7 +265,6 @@ namespace BitFunnel
             m_configuration =
                 Factories::CreateConfiguration(gramSize,
                                                generateTermToText,
-                                               *m_idfTable,
                                                *m_facts);
         }
     }
@@ -329,11 +297,6 @@ namespace BitFunnel
                     m_shardDefinition->GetShardCount());
         }
 
-        if (m_idfTable == nullptr)
-        {
-            m_idfTable = Factories::CreateIndexedIdfTable();
-        }
-
         if (m_facts.get() == nullptr)
         {
             m_facts = Factories::CreateFactSet();
@@ -344,7 +307,6 @@ namespace BitFunnel
             m_configuration =
                 Factories::CreateConfiguration(gramSize,
                                                generateTermToText,
-                                               *m_idfTable,
                                                *m_facts);
         }
     }
@@ -356,22 +318,35 @@ namespace BitFunnel
 
         if (m_sliceAllocator.get() == nullptr)
         {
-            const ShardId tempId = 0;
-            const size_t m_blockSize =
-                32 * GetReasonableBlockSize(*m_schema, m_termTables->GetTermTable(tempId));
-                // std::cout << "Blocksize: " << blockSize << std::endl;
+            // To calculate a large-enough m_blocksize, we need to calculate the
+            // largest blocksize (slice) required by any TermTable (shard).
+            size_t m_blockSize = 0;
+            for (size_t tableId=0; tableId < m_termTables->size(); ++tableId)
+            {
+                const size_t tblBlockSize = GetReasonableBlockSize(*m_schema, m_termTables->GetTermTable(tableId));
+                if (tblBlockSize > m_blockSize)
+                {
+                    m_blockSize = tblBlockSize;
+                }
+            }
 
 
             // If the user didn't specify the block allocator buffer size, use
             // a default that is small enough that it won't cause a CI failure.
             // The CI machines don't have a lot of memory, so it is necessary
-            // to use a modest initial block count to allow unit tests to pass.
+            // to use a modest memory requirement (1GiB) to allow unit tests to pass.
             // See issue #388.
-            size_t blockCount = 512;
-            if (m_blockAllocatorBufferSize != 0)
+            if (m_blockAllocatorBufferSize == 0)
             {
-                // Otherwise, compute block count based on requested buffer size.
-                blockCount = m_blockAllocatorBufferSize / m_blockSize;
+                m_blockAllocatorBufferSize = 1073741824;
+            }
+
+            // Calculate number of slices that will fit in requested memory.
+            // Ensure we have enough memory for at least one slice per termtable
+            size_t blockCount = m_blockAllocatorBufferSize / m_blockSize;
+            if (blockCount < m_termTables->size())
+            {
+                throw FatalError("Insufficient memory requested to build index");
             }
 
             m_sliceAllocator =
@@ -444,12 +419,6 @@ namespace BitFunnel
     {
         EnsureStarted(true);
         return *m_recycler;
-    }
-
-
-    ITermTable const & SimpleIndex::GetTermTable0() const
-    {
-        return GetTermTable(0);
     }
 
 

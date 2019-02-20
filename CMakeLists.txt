@@ -75,7 +75,7 @@ set(WEVERYTHING_FLAGS "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic
 # set(MSAN_FLAGS "-fsanitize=memory")
 
 if(MSVC)
-  set(COMMON_CXX_FLAGS "${COMMON_CXX_FLAGS} /W4 /WX")
+  set(COMMON_CXX_FLAGS "${COMMON_CXX_FLAGS} /W4 /WX -D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING")
   set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_CXX_FLAGS_DEBUG} ${COMMON_CXX_FLAGS} /MTd")
   set(CMAKE_CXX_FLAGS_RELEASE  "${CMAKE_CXX_FLAGS_RELEASE} ${COMMON_CXX_FLAGS} /MT /Z7")
   set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} /DEBUG" )
@@ -143,6 +143,7 @@ set(CHUNKS_HFILES
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Chunks/DocumentFilters.h
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Chunks/IChunkManifestIngestor.h
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Chunks/IChunkProcessor.h
+  ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Chunks/IChunkWriter.h
 )
 
 set(DATA_HFILES
@@ -189,9 +190,11 @@ set(MOCKS_HFILES
 set(PLAN_HFILES
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Plan/Factories.h
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Plan/IMatchVerifier.h
+  ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Plan/IQueryEngine.h
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Plan/QueryInstrumentation.h
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Plan/QueryParser.h
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Plan/QueryRunner.h
+  ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Plan/ResultsBuffer.h
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Plan/TermMatchNode.h
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Plan/VerifyOneQuery.h
   ${CMAKE_SOURCE_DIR}/inc/BitFunnel/Plan/VerifyOneQuerySynthetic.h

@@ -28,6 +28,7 @@
 #include "BitFunnel/Index/IDocument.h"
 #include "BitFunnel/Index/IDocumentCache.h"
 #include "BitFunnel/Index/IIngestor.h"
+#include "BitFunnel/Index/IShard.h"
 #include "BitFunnel/Index/RowIdSequence.h"
 #include "Environment.h"
 #include "ShowCommand.h"
@@ -43,8 +44,7 @@ namespace BitFunnel
     Show::Show(Environment & environment,
                Id id,
                char const * parameters)
-        : TaskBase(environment, id, Type::Synchronous),
-          m_shard(0)
+        : TaskBase(environment, id, Type::Synchronous)
     {
         auto tokens = TaskFactory::Tokenize(parameters);
         std::string command;
@@ -57,7 +57,12 @@ namespace BitFunnel
         if (command.compare("cache") == 0)
         {
             m_mode = Mode::Cache;
-            m_term = TaskFactory::GetNextToken(parameters);
+            if (tokens.size() < 2)
+            {
+                RecoverableError error("`show cache` expects a term.");
+                throw error;
+            }
+            m_term = tokens[1];
         }
         else if (command.compare("rows") == 0)
         {
@@ -65,21 +70,23 @@ namespace BitFunnel
             if (tokens.size() < 2)
             {
                 RecoverableError error("`show rows` expects a term.");
+                throw error;
             }
             m_term = tokens[1];
-            if (tokens.size() == 3)
-            {
-                m_shard = std::stoull(tokens[2].c_str());
-            }
         }
         else if (command.compare("term") == 0)
         {
             m_mode = Mode::Term;
-            m_term = TaskFactory::GetNextToken(parameters);
+            if (tokens.size() < 2)
+            {
+                RecoverableError error("`show term` expects a term.");
+                throw error;
+            }
+            m_term = tokens[1];
         }
         else
         {
-            RecoverableError error("`show` command expects \"term\" or \"rows\".");
+            RecoverableError error("`show` command expects \"cache\", \"term\" or \"rows\".");
             throw error;
         }
     }
@@ -116,7 +123,6 @@ namespace BitFunnel
             // TODO: Consider parsing phrase terms here.
             auto & environment = GetEnvironment();
             Term term(m_term.c_str(), 0, environment.GetConfiguration());
-            RowIdSequence rows(term, environment.GetTermTable(m_shard));
 
             output
                 << "Term("
@@ -125,77 +131,74 @@ namespace BitFunnel
 
             IIngestor & ingestor = GetEnvironment().GetIngestor();
 
-
-            // TODO: Come up with a better heuristic for deciding which
-            // bits to display. Current algorithm is to display bits for
-            // the first 64 documents with ids less than 1000000.
-
-            std::vector<DocId> ids;
-            for (DocId id = 0; id <= 1000000; ++id)
+            auto maxshard = environment.GetMaxShard();
+            for (auto shardId = environment.GetMinShard(); shardId <= maxshard; ++shardId)
             {
-                if (ingestor.Contains(id))
-                {
-                    DocumentHandle handle = ingestor.GetHandle(id);
-                    if (handle.GetShardId() == m_shard)
-                    {
-                        ids.push_back(id);
-                        if (ids.size() == 64)
-                        {
-                            break;
-                        }
-                    }
-                }
-            }
 
-            // Print out 100s digit of DocId.
-            output << "                 d ";
-            for (auto id : ids)
-            {
-                output << ((id / 100) % 10);
-            }
-            output << std::endl;
-
-            // Print ouf 10s digit of DocId.
-            output << "                 o ";
-            for (auto id : ids)
-            {
-                output << ((id / 10) % 10);
-            }
-            output << std::endl;
-
-            // Print out 1s digit of DocId.
-            output << "                 c ";
-            for (auto id : ids)
-            {
-                output << (id % 10);
-            }
-            output << std::endl;
-
-            // Print out RowIds and their bits.
-            for (auto row : rows)
-            {
                 output
-                    << "  RowId("
-                    << row.GetRank()
-                    << ", "
-                    << std::setw(5)
-                    << row.GetIndex()
-                    << ")";
+                    << "Shard: " << shardId << std::endl;
 
-                if (m_mode == Mode::Rows)
+                // Gather DocIds for first 64 documents in shard
+                IShard& shard = ingestor.GetShard(shardId);
+                std::vector<DocId> ids;
+                auto itPtr = shard.GetIterator();
+                auto & it = *itPtr;
+                for (size_t i = 0; i < 64 && !it.AtEnd(); ++it, ++i)
                 {
-                    output << ": ";
-                    for (auto id : ids)
-                    {
-                        if (ingestor.Contains(id))
-                        {
-                            auto handle = ingestor.GetHandle(id);
-                            output << (handle.GetBit(row) ? "1" : "0");
-                        }
-                    }
+                    ids.push_back((*it).GetDocId());
                 }
 
+                // Print out 100s digit of DocId.
+                output << "                 d ";
+                for (auto id : ids)
+                {
+                    output << ((id / 100) % 10);
+                }
                 output << std::endl;
+
+                // Print ouf 10s digit of DocId.
+                output << "                 o ";
+                for (auto id : ids)
+                {
+                    output << ((id / 10) % 10);
+                }
+                output << std::endl;
+
+                // Print out 1s digit of DocId.
+                output << "                 c ";
+                for (auto id : ids)
+                {
+                    output << (id % 10);
+                }
+                output << std::endl;
+
+                // Print out RowIds and their bits.
+                RowIdSequence rows(term, environment.GetTermTable(shardId));
+                for (auto row : rows)
+                {
+                    output
+                        << "  RowId("
+                        << row.GetRank()
+                        << ", "
+                        << std::setw(5)
+                        << row.GetIndex()
+                        << ")";
+
+                    if (m_mode == Mode::Rows)
+                    {
+                        output << ": ";
+                        for (auto id : ids)
+                        {
+                            if (ingestor.Contains(id))
+                            {
+                                auto handle = ingestor.GetHandle(id);
+                                output << (handle.GetBit(row) ? "1" : "0");
+                            }
+                        }
+                    }
+
+                    output << std::endl;
+                }
             }
         }
     }
@@ -205,14 +208,12 @@ namespace BitFunnel
     {
         return Documentation(
             "show",
-            "Shows information about various data structures. (TODO)",
+            "Shows information about various data structures.",
             "show cache <term>\n"
-            "   | rows <term> [shard = 0]\n"
+            "   | rows <term>\n"
             "   | term <term>\n"
-            //"   | shards\n"
-            //"   | shard <shardid>\n"
-            "  Shows information about various data structures."
-            "  PARTIALLY IMPLEMENTED\n"
+            "  Shows information about various data structures.\n"
+            "  Results are shown for the shard(s) specified by `shard`.\n"
         );
     }
 }

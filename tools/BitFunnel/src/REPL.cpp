@@ -23,6 +23,7 @@
 #include <iostream>
 
 #include "BitFunnel/Exceptions.h"
+#include "BitFunnel/Index/IIngestor.h"
 #include "BitFunnel/Utilities/ReadLines.h"
 #include "CmdLineParser/CmdLineParser.h"
 #include "Environment.h"
@@ -44,8 +45,8 @@ namespace BitFunnel
                    char const *argv[])
     {
         CmdLine::CmdLineParser parser(
-            "StatisticsBuilder",
-            "Ingest documents and compute statistics about them.");
+            "Repl",
+            "Interactively process user commands.");
 
         CmdLine::RequiredParameter<char const *> path(
             "config",
@@ -81,11 +82,20 @@ namespace BitFunnel
             "File with commands to execute.",
             nullptr);
 
+        // TODO: This parameter should be unsigned, but it doesn't seem to work
+        // with CmdLineParser.
+        CmdLine::OptionalParameter<int> restore(
+            "restore",
+            "Specify non-zero number to re-load saved slices.",
+            0u,
+            CmdLine::GreaterThan(0));
+
         parser.AddParameter(path);
         parser.AddParameter(gramSize);
         parser.AddParameter(threadCount);
         parser.AddParameter(memory);
         parser.AddParameter(scriptFile);
+        parser.AddParameter(restore);
 
         int returnCode = 1;
 
@@ -101,23 +111,24 @@ namespace BitFunnel
                    static_cast<size_t>(gramSize),
                    static_cast<size_t>(threadCount),
                    static_cast<size_t>(memory) * 1024ull,
+                   static_cast<size_t>(restore),
                    scriptFile);
                 returnCode = 0;
             }
             catch (RecoverableError e)
             {
-                output << "Error: " << e.what() << std::endl;
+                output << "Error (RecoverableError): " << e.what() << std::endl;
                 Advice(output);
             }
             catch (FatalError e)
             {
-                output << "Fatal Error: " << e.what() << std::endl;
+                output << "Error (FatalError): " << e.what() << std::endl;
                 Advice(output);
             }
             catch (Logging::CheckException e)
             {
                 output
-                    << "Error: "
+                    << "Error (CheckException): "
                     << e.GetMessage()
                     << std::endl;
                 Advice(output);
@@ -145,8 +156,8 @@ namespace BitFunnel
             << std::endl
             << "Verify that directory path is valid and that the folder contains index files." << std::endl
             << "You can generate new index files with" << std::endl
-            << "  BitFunnel statistics <manifest> <directory> -statistics" << std::endl
-            << "  BitFunnel termtabe <directory>" << std::endl
+            << "  BitFunnel statistics <manifest> <directory>" << std::endl
+            << "  BitFunnel termtable <directory> <density> <treatment>" << std::endl
             << "For more information run \"BitFunnel statistics -help\" and" << std::endl
             << "\"BitFunnel termtable -help\"." << std::endl;
     }
@@ -158,6 +169,7 @@ namespace BitFunnel
                   size_t gramSize,
                   size_t threadCount,
                   size_t memory,
+                  size_t restore,
                   char const * scriptFile) const
     {
         output
@@ -182,6 +194,12 @@ namespace BitFunnel
             << std::endl;
 
         environment.StartIndex();
+        environment.SetShards(0, environment.GetIngestor().GetShardCount() - 1);
+        if (restore)
+        {
+            auto & fileManager = environment.GetSimpleIndex().GetFileManager();
+            environment.GetIngestor().TemporaryReadAllSlices(fileManager);
+        }
 
         Loop(environment,
                 input,
@@ -265,7 +283,18 @@ namespace BitFunnel
             }
             catch (RecoverableError e)
             {
-                output << "Error: " << e.what() << std::endl;
+                output << "Error (RecoverableError): " << e.what() << std::endl;
+                if (environment.GetFailOnException())
+                {
+                    throw e;
+                }
+            }
+            catch (Logging::CheckException e)
+            {
+                // TODO: We probably shouldn't catch CheckException here since
+                // we don't know whether the situation is safely recoverable.
+                // https://github.com/BitFunnel/BitFunnel/issues/425
+                output << "Error (CheckException): " << e.GetMessage() << std::endl;
                 if (environment.GetFailOnException())
                 {
                     throw e;

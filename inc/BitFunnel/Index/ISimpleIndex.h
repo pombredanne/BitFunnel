@@ -35,7 +35,6 @@ namespace BitFunnel
     class IFactSet;
     class IFileManager;
     class IFileSystem;
-    class IIndexedIdfTable;
     class IIngestor;
     class IRecycler;
     class IShardDefinition;
@@ -69,8 +68,6 @@ namespace BitFunnel
             std::unique_ptr<IFileManager> fileManager) = 0;
         //virtual void SetFileSystem(
         //    std::unique_ptr<IFileSystem> fileSystem) = 0;
-        virtual void SetIdfTable(
-            std::unique_ptr<IIndexedIdfTable> idfTable) = 0;
         virtual void SetSchema(
             std::unique_ptr<IDocumentDataSchema> schema) = 0;
         virtual void SetShardDefinition(
@@ -129,13 +126,6 @@ namespace BitFunnel
         virtual IIngestor & GetIngestor() const = 0;
         virtual IRecycler & GetRecycler() const = 0;
 
-        // TODO: return ITermTableCollection or take ShardId.
-        // GetTermTable0() is a temporary method that makes it easy to spot
-        // all of the places in the code that are not Shard-aware. Intention
-        // is to eliminate GetTermTable0() which will cause compiler errors
-        // that will need to be addressed when moving to a multi-shard
-        // system.
-        virtual ITermTable const & GetTermTable0() const = 0;
         virtual ITermTable const & GetTermTable(ShardId shardId) const = 0;
     };
 }

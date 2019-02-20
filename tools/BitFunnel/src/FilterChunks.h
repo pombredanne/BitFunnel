@@ -26,6 +26,7 @@
 
 namespace BitFunnel
 {
+    class IChunkWriterFactory;
     class IDocumentFilter;
     class IFileSystem;
 
@@ -36,6 +37,7 @@ namespace BitFunnel
     // An IExecutable that copies a set of chunk files specified by a manifest,
     // while filtering the documents based on a set of predicates, including
     // random sampling, posting count in range, and total number of documents.
+    // Can also annotate each document with a pseudo-term indicating its shard.
     //
     //*************************************************************************
     class FilterChunks : public IExecutable
@@ -57,7 +59,8 @@ namespace BitFunnel
             char const * intermediateDirectory,
             char const * chunkListFileName,
             int gramSize,
-            IDocumentFilter & filter) const;
+            IDocumentFilter & filter,
+            char const * writer) const;
 
         IFileSystem& m_fileSystem;
     };

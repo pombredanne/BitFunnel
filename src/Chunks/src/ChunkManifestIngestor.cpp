@@ -20,11 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include <fstream>
-#include <iostream>
+#include <iostream>     // TODO: this library method should not print to std::cout.
+#include <istream>
 #include <sstream>
 
 #include "BitFunnel/Chunks/Factories.h"
+#include "BitFunnel/Chunks/IChunkWriter.h"
 #include "BitFunnel/Configuration/IFileSystem.h"
 #include "BitFunnel/Exceptions.h"
 #include "BitFunnel/IFileManager.h"
@@ -38,7 +39,7 @@ namespace BitFunnel
     std::unique_ptr<IChunkManifestIngestor>
         Factories::CreateChunkManifestIngestor(
             IFileSystem& fileSystem,
-            IFileManager * fileManager,
+            IChunkWriterFactory* chunkWriterFactory,
             std::vector<std::string> const & filePaths,
             IConfiguration const & config,
             IIngestor& ingestor,
@@ -46,27 +47,26 @@ namespace BitFunnel
             bool cacheDocuments)
     {
         return std::unique_ptr<IChunkManifestIngestor>(
-            new ChunkManifestIngestor(
-                fileSystem,
-                fileManager,
-                filePaths,
-                config,
-                ingestor,
-                filter,
-                cacheDocuments));
+            new ChunkManifestIngestor(fileSystem,
+                                      chunkWriterFactory,
+                                      filePaths,
+                                      config,
+                                      ingestor,
+                                      filter,
+                                      cacheDocuments));
     }
 
 
     ChunkManifestIngestor::ChunkManifestIngestor(
         IFileSystem& fileSystem,
-        IFileManager * fileManager,
+        IChunkWriterFactory* chunkWriterFactory,
         std::vector<std::string> const & filePaths,
         IConfiguration const & config,
         IIngestor& ingestor,
         IDocumentFilter & filter,
         bool cacheDocuments)
       : m_fileSystem(fileSystem),
-        m_fileManager(fileManager),
+        m_chunkWriterFactory(chunkWriterFactory),
         m_filePaths(filePaths),
         m_configuration(config),
         m_ingestor(ingestor),
@@ -90,6 +90,7 @@ namespace BitFunnel
             throw error;
         }
 
+        // TODO: this library method should not print to std::cout.
         std::cout << "  " << m_filePaths[index] << std::endl;
 
         auto input = m_fileSystem.OpenForRead(m_filePaths[index].c_str(),
@@ -99,8 +100,8 @@ namespace BitFunnel
         {
             std::stringstream message;
             message << "Failed to open chunk file '"
-                << m_filePaths[index]
-                << "'";
+                    << m_filePaths[index]
+                    << "'";
             throw FatalError(message.str());
         }
 
@@ -115,18 +116,18 @@ namespace BitFunnel
                           std::istreambuf_iterator<char>());
 
         {
-            // Block scopes std::ostream.
-            std::unique_ptr<std::ostream> output;
-            if (m_fileManager != nullptr)
-            {
-                output = m_fileManager->Chunk(index).OpenForWrite();
+            // Block scopes IChunkWriter.
+            // IChunkWriter's destructor zero-terminates its output and closes its stream.
+            std::unique_ptr<IChunkWriter> chunkWriter;
+            if (m_chunkWriterFactory != nullptr) {
+                chunkWriter = m_chunkWriterFactory->CreateChunkWriter(index);
             }
 
             ChunkIngestor processor(m_configuration,
                                     m_ingestor,
                                     m_cacheDocuments,
                                     m_filter,
-                                    std::move(output));
+                                    chunkWriter.get());     // TODO: consider std::move chunkwriter to processor.
 
             ChunkReader(&chunkData[0],
                         &chunkData[0] + chunkData.size(),

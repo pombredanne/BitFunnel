@@ -33,28 +33,8 @@
 
 namespace BitFunnel
 {
+    class IChunkWriter;
     class IDocument;
-
-    //*************************************************************************
-    //
-    // IChunkWriter
-    //
-    // Interfaces passed to IChunkProcessor to aid in copying a subset of
-    // documents from a chunk file. IChunkWriter provides methods for writing
-    // documents in the format of the reader that generates IChunkProcessor
-    // callbacks.
-    //
-    //*************************************************************************
-    class IChunkWriter : public IInterface
-    {
-    public:
-        // Writes the most recently read document to a stream.
-        virtual void Write(std::ostream& output) = 0;
-
-        // Call this method once after a sequence of calls to Write() in
-        // order to write any necessary epilogue and close the stream.
-        virtual void Complete(std::ostream& output) = 0;
-    };
 
 
     //*************************************************************************
@@ -97,8 +77,7 @@ namespace BitFunnel
         virtual void OnStreamEnter(Term::StreamId id) = 0;
         virtual void OnTerm(char const * term) = 0;
         virtual void OnStreamExit() = 0;
-        virtual void OnDocumentExit(IChunkWriter & writer,
-                                    size_t bytesRead) = 0;
-        virtual void OnFileExit(IChunkWriter & writer) = 0;
+        virtual void OnDocumentExit(char const * start, size_t length) = 0;
+        virtual void OnFileExit() = 0;
     };
 }

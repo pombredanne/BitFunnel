@@ -29,6 +29,7 @@
 
 #include "BitFunnel/BitFunnelTypes.h"       // ShardId parameter, embedded.
 #include "BitFunnel/Index/IShard.h"         // Base class.
+#include "BitFunnel/Index/Token.h"          // Token embedded.
 #include "BitFunnel/NonCopyable.h"          // Base class.
 #include "BitFunnel/Term.h"                 // Term parameter.
 #include "DocTableDescriptor.h"             // Required for embedded std::unique_ptr.
@@ -82,7 +83,6 @@ namespace BitFunnel
         void AssertFact(FactHandle fact, bool value, DocIndex index, void* sliceBuffer);
 
         void TemporaryRecordDocument();
-        void TemporaryWriteIndexedIdfTable(std::ostream& out) const;
         void TemporaryWriteCumulativeTermCounts(std::ostream& out) const;
 
 
@@ -112,8 +112,17 @@ namespace BitFunnel
             std::ostream& out,
             ITermToText const * termToText) const override;
 
+        virtual void TemporaryReadAllSlices(IFileManager& fileManager, size_t nbrSlices) override;
+
         virtual void TemporaryWriteAllSlices(IFileManager& fileManager) const override;
 
+
+        // Returns an iterator to the DocumentHandles corresponding to
+        // documents currently active in the index. This method is
+        // thread safe with respect to document addition and deletion.
+        // WARNING: this iterator holds a Token which will prevent
+        // recycling. Be sure to release iterator when finished.
+        virtual std::unique_ptr<const_iterator> GetIterator() override;
 
         // Returns an std::vector containing the bit densities for each row in
         // the RowTable with the specified rank. Bit densities are computed
@@ -121,6 +130,7 @@ namespace BitFunnel
         // documents.
         virtual std::vector<double>
             GetDensities(Rank rank) const override;
+
         //
         // Shard exclusive members.
         //
@@ -323,5 +333,47 @@ namespace BitFunnel
 
         std::unique_ptr<DocumentFrequencyTableBuilder> m_docFrequencyTableBuilder;
         std::mutex m_temporaryFrequencyTableMutex;
+
+        //
+        // DocumentHandle iterator
+        //
+        class ConstIterator : public IShard::const_iterator
+        {
+        public:
+            ConstIterator(Shard const & shard);
+
+            //
+            // IShard::const_iterator methods
+            //
+
+            virtual const_iterator& operator++() override;
+            virtual DocumentHandle operator*() const override;
+            virtual bool AtEnd() const override;
+
+        private:
+            // If the current document is not active, advance until an active
+            // document is found or we reach the end of the shard.
+            void EnsureActive();
+
+            // DESIGN NOTE: class is NonCopyable because Token is NonCopyable.
+            // WARNING: m_token must be declared before m_sliceBuffers to ensure
+            // that the constructor will be holding the token before initializing
+            // m_sliceBuffers. If m_sliceBuffers were to be initialized before
+            // m_token, there is a possibility that m_sliceBuffers could be
+            // recycled.
+            Token m_token;
+
+            // Holds a snapshot of the shard's m_sliceBuffers vector.
+            // m_token ensures this snapshot won't be recycled.
+            std::vector<void*>* m_sliceBuffers;
+
+            const DocIndex m_sliceCapacity;
+
+            // State of the iteration is specified by m_sliceIndex and
+            // m_sliceOffset. The member m_slice is a convenience variable.
+            size_t m_sliceIndex;
+            Slice* m_slice;
+            size_t m_sliceOffset;
+        };
     };
 }

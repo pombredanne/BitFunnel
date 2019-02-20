@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 
-// Copyright (c) 2016, Microsoft
+// Copyright (c) 2018, Microsoft
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,34 +22,23 @@
 
 #pragma once
 
-#include <iosfwd>                               // std::istream parameter.
-#include <unordered_map>                        // Embedded.
-
-#include "BitFunnel/Index/IIndexedIdfTable.h"   // Base class.
+#include "TaskBase.h"   // TaskBase base class.
 
 
 namespace BitFunnel
 {
-    class IndexedIdfTable : public IIndexedIdfTable
+    class ShardCommand : public TaskBase
     {
     public:
-        // TODO: Remove this temporary constructor.
-        IndexedIdfTable();
+        ShardCommand(Environment & environment,
+                     Id id,
+                     char const * parameters);
 
-        IndexedIdfTable(std::istream& input, Term::IdfX10 defaultIdf);
-
-        static void WriteHeader(std::ostream& output, size_t entryCount);
-        static void WriteEntry(std::ostream& output,
-                               Term::Hash hash, Term::IdfX10 idf);
-
-        //
-        // IIndexedIdfTable methods.
-        //
-        virtual Term::IdfX10 GetIdf(Term::Hash hash) const override;
+        virtual void Execute() override;
+        static ICommand::Documentation GetDocumentation();
 
     private:
-        Term::IdfX10 m_defaultIdf;
-
-        std::unordered_map<Term::Hash, Term::IdfX10> m_terms;
+        size_t m_minshard;
+        size_t m_maxshard;
     };
 }

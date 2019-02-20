@@ -42,7 +42,7 @@ namespace BitFunnel
     // Extracts a RowId used to mark documents as active/soft-deleted.
     static RowId RowIdForActiveDocument(ITermTable const & termTable)
     {
-        RowIdSequence rows(termTable.GetDocumentActiveTerm(), termTable);
+        RowIdSequence rows(ITermTable::GetDocumentActiveTerm(), termTable);
 
         auto it = rows.begin();
         if (it == rows.end())
@@ -148,9 +148,9 @@ namespace BitFunnel
         }
         catch (std::exception e)
         {
-	  //            LogB(Logging::Error, "LoadSliceBuffer", "Error reading slice buffer data from stream");
+//            LogB(Logging::Error, "LoadSliceBuffer", "Error reading slice buffer data from stream");
             m_sliceBufferAllocator.Release(buffer);
-	    throw e;
+            throw e;
         }
 
         return buffer;
@@ -419,7 +419,7 @@ namespace BitFunnel
 
     void Shard::AssertFact(FactHandle fact, bool value, DocIndex index, void* sliceBuffer)
     {
-        Term term(fact, 0u, 0u, 1u);
+        Term term(fact, 0u, 1u);
         RowIdSequence rows(term, m_termTable);
         auto it = rows.begin();
 
@@ -477,22 +477,41 @@ namespace BitFunnel
     }
 
 
-    void Shard::TemporaryWriteIndexedIdfTable(std::ostream& out) const
-    {
-        // TODO: 0.0 is the truncation frequency, which shouldn't be fixed at 0.
-        if (m_docFrequencyTableBuilder.get() != nullptr)
-        {
-            m_docFrequencyTableBuilder->WriteIndexedIdfTable(out, 0.0);
-        }
-    }
-
-
     void Shard::TemporaryWriteCumulativeTermCounts(std::ostream& out) const
     {
         if (m_docFrequencyTableBuilder.get() != nullptr)
         {
             m_docFrequencyTableBuilder->WriteCumulativeTermCounts(out);
         }
+    }
+
+
+    // Reload a shard's saved slices, completely replacing whatever slices are in the shard
+    // The last loaded slice will be the active slice
+    void Shard::TemporaryReadAllSlices(IFileManager& fileManager, size_t nbrSlices)
+    {
+        auto token = m_tokenManager.RequestToken();
+
+        std::vector<void*>* const newSlices = new std::vector<void*>();
+        for (size_t i = 0; i < nbrSlices; ++i)
+        {
+            auto sliceFile = fileManager.IndexSlice(m_shardId, i);
+            auto in = sliceFile.OpenForRead();
+            Slice* newSlice = new Slice(*this, *in);
+            newSlices->push_back(newSlice->GetSliceBuffer());
+            m_activeSlice = newSlice;
+        }
+
+        std::vector<void*>* oldSlices = m_sliceBuffers;
+        m_sliceBuffers = newSlices;
+
+        // TODO: think if this can be done outside of the lock.
+        std::unique_ptr<IRecyclable>
+            recyclableSliceList(new DeferredSliceListDelete(nullptr,
+                oldSlices,
+                m_tokenManager));
+
+        m_recycler.ScheduleRecyling(recyclableSliceList);
     }
 
 
@@ -511,22 +530,105 @@ namespace BitFunnel
     }
 
 
+    //*************************************************************************
+    //
+    // DocumentHandle iterator.
+    //
+    //*************************************************************************
+    Shard::ConstIterator::ConstIterator(Shard const & shard)
+      : m_token(shard.m_tokenManager.RequestToken()),
+        m_sliceBuffers(shard.m_sliceBuffers),
+        m_sliceCapacity(shard.m_sliceCapacity),
+        m_sliceIndex(0),
+        m_slice(nullptr),
+        m_sliceOffset(0)
+    {
+        // Advance to first active document, if not already at one.
+        EnsureActive();
+    }
+
+
+    void Shard::ConstIterator::EnsureActive()
+    {
+        for (; !AtEnd(); ++m_sliceIndex)
+        {
+            m_slice = Slice::GetSliceFromBuffer(
+                (*m_sliceBuffers)[m_sliceIndex],
+                GetSlicePtrOffset());
+
+            for (; m_sliceOffset < m_sliceCapacity; ++m_sliceOffset)
+            {
+                DocumentHandleInternal handle(m_slice, m_sliceOffset);
+                if (handle.IsActive())
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+
+    bool Shard::ConstIterator::AtEnd() const
+    {
+        return m_sliceIndex >= m_sliceBuffers->size();
+    }
+
+
+    Shard::const_iterator& Shard::ConstIterator::operator++()
+    {
+        if (AtEnd())
+        {
+            RecoverableError
+                error("Shard::ConstIterator::operator++: iterator beyond end.");
+            throw error;
+        }
+
+        ++m_sliceOffset;
+        EnsureActive();
+        return *this;
+    }
+
+
+    DocumentHandle Shard::ConstIterator::operator*() const
+    {
+        if (AtEnd())
+        {
+            RecoverableError
+                error("Shard::ConstIterator::operator*: iterator beyond end.");
+            throw error;
+        }
+
+        return DocumentHandleInternal(m_slice, m_sliceOffset);
+    }
+
+
+    std::unique_ptr<IShard::const_iterator> Shard::GetIterator()
+    {
+        std::unique_ptr<IShard::const_iterator> it(new ConstIterator(*this));
+        return it;
+    }
+
+
+    //*************************************************************************
+    //
+    // GetDensities
+    //
+    //*************************************************************************
     std::vector<double> Shard::GetDensities(Rank rank) const
     {
         // Hold a token to ensure that m_sliceBuffers won't be recycled.
         auto token = m_tokenManager.RequestToken();
 
-        // m_sliceBuffers can change at any time, but we can safely grab a copy
-        // because
-        //   1. m_sliceBuffers is std::atomic.
-        //   2. no m_sliceBuffers value observed while holding token can be
-        //      recycled.
+        // m_sliceBuffers can change at any time, but we can safely grab the
+        // pointer because
+        //   1. m_sliceBuffers is std::atomic
+        //   2. token guarantees that m_sliceBuffers pointer cannot be recycled.
         std::vector<void*> const & buffers = *m_sliceBuffers;
 
         RowTableDescriptor const & rowTable = m_rowTables[rank];
         RowTableDescriptor const & rowTable0 = m_rowTables[0];
 
-        RowIndex active = (*RowIdSequence(m_termTable.GetDocumentActiveTerm(),
+        RowIndex active = (*RowIdSequence(ITermTable::GetDocumentActiveTerm(),
                                           m_termTable).begin()).GetIndex();
 
         std::vector<double> densities;

@@ -1,9 +1,10 @@
 version: '{build}'
 
-os: Visual Studio 2015
+os: Visual Studio 2017
 
 environment:
   matrix:
+  - Toolset: v150
   - Toolset: v140
   - Toolset: v120
   - Toolset: v110
@@ -30,6 +31,7 @@ before_build:
     Write-Output "Platform: $env:PLATFORM"
     $generator = switch ($env:TOOLSET)
     {
+        "v150" {"Visual Studio 15 2017"}
         "v140" {"Visual Studio 14 2015"}
         "v120" {"Visual Studio 12 2013"}
         "v110" {"Visual Studio 11 2012"}
@@ -49,7 +51,7 @@ build_script:
     md _build -Force | Out-Null
     cd _build
 
-    & cmake -G "$generator" -DCMAKE_CONFIGURATION_TYPES="Debug;Release" -Dgtest_build_tests=ON -Dgtest_build_samples=ON -Dgmock_build_tests=ON ..
+    & cmake -G "$generator" -DCMAKE_CONFIGURATION_TYPES="Debug;Release" ..
     if ($LastExitCode -ne 0) {
         throw "Exec: $ErrorMessage"
     }

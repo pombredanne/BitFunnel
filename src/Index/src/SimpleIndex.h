@@ -30,7 +30,6 @@
 #include "BitFunnel/IFileManager.h"                 // Parameterizes std::unique_ptr.
 #include "BitFunnel/Index/IConfiguration.h"         // Parameterizes std::unique_ptr.
 #include "BitFunnel/Index/IDocumentDataSchema.h"    // Parameterizes std::unique_ptr.
-#include "BitFunnel/Index/IIndexedIdfTable.h"       // Parameterizes std::unique_ptr.
 #include "BitFunnel/Index/IIngestor.h"              // Parameterizes std::unique_ptr.
 #include "BitFunnel/Index/IRecycler.h"              // Parameterizes std::unique_ptr.
 #include "BitFunnel/Index/ISliceBufferAllocator.h"  // Parameterizes std::unique_ptr.
@@ -63,8 +62,6 @@ namespace BitFunnel
             std::unique_ptr<IFileManager> fileManager) override;
         //virtual void SetFileSystem(
         //    std::unique_ptr<IFileSystem> fileSystem) override;
-        virtual void SetIdfTable(
-            std::unique_ptr<IIndexedIdfTable> idfTable) override;
         virtual void SetSchema(
             std::unique_ptr<IDocumentDataSchema> schema) override;
         virtual void SetShardDefinition(
@@ -98,7 +95,6 @@ namespace BitFunnel
         virtual IFileSystem & GetFileSystem() const override;
         virtual IIngestor & GetIngestor() const override;
         virtual IRecycler & GetRecycler() const override;
-        virtual ITermTable const & GetTermTable0() const override;
         virtual ITermTable const & GetTermTable(ShardId shardId) const override;
 
     private:
@@ -128,7 +124,6 @@ namespace BitFunnel
 
         // Following members may become per-shard.
         std::unique_ptr<ITermTableCollection> m_termTables;
-        std::unique_ptr<IIndexedIdfTable> m_idfTable;
         std::unique_ptr<IConfiguration> m_configuration;
 
         size_t m_blockAllocatorBufferSize;

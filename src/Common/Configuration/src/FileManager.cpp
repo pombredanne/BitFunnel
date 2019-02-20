@@ -53,7 +53,7 @@ namespace BitFunnel
                                    "Chunk",
                                    ".chunk")),
 
-          m_columnDensities(new ParameterizedFile0(fileSystem,
+          m_columnDensities(new ParameterizedFile1(fileSystem,
                                                    statisticsDirectory,
                                                    "ColumnDensities",
                                                    ".csv")),
@@ -61,7 +61,7 @@ namespace BitFunnel
               new ParameterizedFile0(fileSystem,
                                      statisticsDirectory,
                                      "ColumnDensitySummary",
-                                     ".txt")),
+                                     ".csv")),
           m_correlate(new ParameterizedFile1(fileSystem,
                                              statisticsDirectory,
                                              "Correlate",
@@ -77,10 +77,7 @@ namespace BitFunnel
                                                      statisticsDirectory,
                                                      "DocumentHistogram",
                                                      ".csv" )),
-          m_indexedIdfTable(new ParameterizedFile1(fileSystem,
-                                                   indexDirectory,
-                                                   "IndexedIdfTable",
-                                                   ".bin")),
+          m_indexSliceMain(new ParameterizedFile0(fileSystem, indexDirectory, "IndexSliceMain", ".bin")),
           m_indexSlice(new ParameterizedFile2(fileSystem, indexDirectory, "IndexSlice", ".bin")),
           m_manifest(new ParameterizedFile0(fileSystem,
                                             indexDirectory,
@@ -102,6 +99,11 @@ namespace BitFunnel
               new ParameterizedFile1(fileSystem,
                                      statisticsDirectory,
                                      "RowDensities",
+                                     ".csv")),
+          m_rowDensitySummary(
+              new ParameterizedFile0(fileSystem,
+                                     statisticsDirectory,
+                                     "RowDensitySummary",
                                      ".csv")),
           m_shardDefinition(
               new ParameterizedFile0(fileSystem,
@@ -131,12 +133,6 @@ namespace BitFunnel
     //
     // FileDescriptor0 files.
     //
-
-    FileDescriptor0 FileManager::ColumnDensities()
-    {
-        return FileDescriptor0(*m_columnDensities);
-    }
-
 
     FileDescriptor0 FileManager::ColumnDensitySummary()
     {
@@ -174,6 +170,12 @@ namespace BitFunnel
     }
 
 
+    FileDescriptor0 FileManager::RowDensitySummary()
+    {
+        return FileDescriptor0(*m_rowDensitySummary);
+    }
+
+
     FileDescriptor0 FileManager::ShardDefinition()
     {
         return FileDescriptor0(*m_shardDefinition);
@@ -192,9 +194,21 @@ namespace BitFunnel
     }
 
 
+    FileDescriptor0 FileManager::IndexSliceMain()
+    {
+        return FileDescriptor0(*m_indexSliceMain);
+    }
+
+
     //
     // FileDescriptor1 files.
     //
+
+    FileDescriptor1 FileManager::ColumnDensities(size_t shard)
+    {
+        return FileDescriptor1(*m_columnDensities, shard);
+    }
+
 
     FileDescriptor1 FileManager::Chunk(size_t number)
     {
@@ -217,12 +231,6 @@ namespace BitFunnel
     FileDescriptor1 FileManager::DocFreqTable(size_t shard)
     {
         return FileDescriptor1(*m_docFreqTable, shard);
-    }
-
-
-    FileDescriptor1 FileManager::IndexedIdfTable(size_t shard)
-    {
-        return FileDescriptor1(*m_indexedIdfTable, shard);
     }
 
 
